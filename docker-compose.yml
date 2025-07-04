@@ -4,8 +4,8 @@ services:
   redis-master:
     image: redis:7
     container_name: redis-master
-    ports:
-      - "7000:6379"
+    expose:
+      - "6379"
     volumes:
       - ./redis/master/redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
@@ -20,8 +20,8 @@ services:
   redis-slave1:
     image: redis:7
     container_name: redis-slave1
-    ports:
-      - "7001:6379"
+    expose:
+      - "6379"
     depends_on:
       - redis-master
     volumes:
@@ -29,12 +29,17 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - redis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "1111", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis-slave2:
     image: redis:7
     container_name: redis-slave2
-    ports:
-      - "7002:6379"
+    expose:
+      - "6379"
     depends_on:
       - redis-master
     volumes:
@@ -42,12 +47,17 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - redis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "1111", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis-slave3:
     image: redis:7
     container_name: redis-slave3
-    ports:
-      - "7003:6379"
+    expose:
+      - "6379"
     depends_on:
       - redis-master
     volumes:
@@ -55,6 +65,11 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - redis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "1111", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   sentinel1:
     image: redis:7
@@ -100,6 +115,32 @@ services:
     networks:
       - redis-net
     restart: unless-stopped
+
+  haproxy:
+    image: haproxy:2.8
+    container_name: haproxy
+    ports:
+      - "6379:6379"     # Redis write (Master)
+      - "6380:6380"     # Redis read (Slaves1~3)
+      - "8404:8404"     # HAProxy 상태 페이지
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - redis-master
+      - redis-slave1
+      - redis-slave2
+      - redis-slave3
+    networks:
+      - redis-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8404/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    tmpfs:
+      - /run/haproxy
+    user: root
 
 networks:
   redis-net:
